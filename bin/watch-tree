@@ -1,0 +1,65 @@
+#!/usr/bin/env node
+
+var watchTree= require("watch-tree").watchTree,
+  fs= require("fs"),
+  argv= require("optimist")
+		.option("modify",{alias:"m",default:true,describe:"show modify actions"})
+		.option("show-files",{alias:"sf",default:true,describe:"show files"})
+		.option("create",{alias:"c",default:false,describe:"show create actions"})
+		.option("delete",{alias:"d",default:false,describe:"show delete actions"})
+		.option("show-dirs",{alias:"sd",default:false,describe:"show dirs"})
+		.option("exclude",{alias:"e",describe:"path regexes to exclude"})
+		.option("h",{alias:"help",default:undefined,describe:"show describe help"})
+
+if(argv.argv.help) {
+	argv.showHelp(console.log)
+	process.exit(0)
+}
+argv= argv.argv
+
+var dirs= [argv._,process.cwd()+"/"+argv._,process.cwd()],
+  dir
+for(var i in dirs)
+	try {
+		if(fs.statSync(dirs[i]).isDirectory()) {
+			dir= dirs[i]
+			break
+		}
+	} catch(ex) {}
+
+var action= []
+if(argv.create) action.push(function(event){return event.isCreate()})
+if(argv.delete) action.push(function(event){return event.isDelete()})
+if(argv.modify) action.push(function(event){return event.isModify()})
+if(action.length == 3)
+	action= []
+
+var ents= []
+if(argv['show-files']) ents.push(function(event){return !event.isDirectory()})
+if(argv['show-dirs']) ents.push(function(event){return event.isDirectory()})
+if(ents.length == 2)
+	ents= []
+
+var args= {},
+  exclude= argv.exclude
+if(!Array.isArray(exclude))
+	exclude= [exclude]
+if(exclude)
+	args.exclude= exclude
+
+watchTree(dir,args,function(event){
+	var ok= !action.length
+	for(var i= 0; i < action.length; ++i)
+		if(action[i](event))
+			ok= true
+	if(!ok)
+		return
+
+	ok= !ents.length
+	for(var i= 0; i < ents.length; ++i)
+		if(ents[i](event))
+			ok= true
+	if(!ok)
+		return
+	console.log(event.name)
+})
